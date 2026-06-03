@@ -103,6 +103,35 @@ flowchart LR
 | PDF Documents | Unity Catalog Volume | `02_generate_brand_docs.py` |
 | Routing audit table (optional) | Lakebase (PostgreSQL) | `run_setup.py` |
 
+### 1.3 Divergences from the reference architecture (technical)
+
+This design realises the reference architecture's behaviour but deviates from its
+structure in four intentional ways. See PRD §5.1 for the product-level rationale and the
+full mapping table; the technical drivers are:
+
+1. **Intake / Router are not supervisor agents.** The reference draws both as MAS boxes.
+   Intake is a deterministic extraction → a direct `enrich_user_request` UC-function call
+   from the app (Phase 1). Routing is the app-owned HITL gate. This removes two LLM
+   supervisor hops from every request.
+2. **In-agent HITL is not buildable on AgentBricks.** A deployed MAS endpoint is a
+   **synchronous request/response** invocation (ChatAgent / Responses API). It cannot
+   suspend execution, persist intermediate state, and resume on an external signal minutes
+   later. Therefore the diagram's "HITL human confirmation *inside* the Router/Intake
+   agent" is realised as an **app-orchestrated gate between two separate calls** (classify
+   → gate → execute). This is the central reason the HITL cannot live in the agent layer.
+3. **No separate Planner/Orchestrator endpoint.** The MAS supervisor performs planning and
+   sub-agent dispatch natively (SDD §3.1, §3.4); a discrete planner serving endpoint on top
+   of it would duplicate that responsibility.
+4. **No LLM Visualization Adapter on the path.** Charts are built deterministically from
+   SQL (SDD §6). The `format_visualization_spec` UC Function is retained only as an optional
+   LLM fallback. This removes a critical-path model call and its JSON-validity failure mode.
+
+**Consequence for the Databricks footprint:** 2 supervisor agents (not 4), 0 custom
+Model-Serving endpoints (not 2), 1 required UC Function (not 3), and Lakebase off the
+critical path. A 1:1 "showcase" build that restores the LLM Visualization Adapter and an
+explicit Planner is deferred (PRD §5.1); even there, item (2) would still force the HITL
+into the app layer.
+
 ---
 
 ## 2. Component Architecture

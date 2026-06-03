@@ -110,10 +110,32 @@ App renders Plotly chart deterministically (SQL keyed on route + context)
 Rendered in Streamlit
 ```
 
-> **Removed vs. the original reference diagram:** MAS #1 (Intake) and MAS #2 (Router)
-> are no longer supervisor agents — intake is a direct UC-function call and routing is
-> the app-owned HITL gate. The standalone LLM "Visualization Adapter" endpoint is
-> replaced by deterministic Python/Plotly rendering driven by SQL.
+### 5.1 Divergences from the reference architecture
+
+This implementation realises the **behaviour** of the original reference architecture
+(intake → classify → HITL-confirm → route → analyse → visualise) but deliberately
+deviates from its **structure** in four places. The reference diagram is a logical
+design; several of its boxes cannot be deployed literally on Databricks AgentBricks, and
+others were simplified for correctness and latency. The divergences are intentional.
+
+| Reference element | Reference intent | This implementation | Why we diverged |
+|---|---|---|---|
+| **Intake Agent** (supervisor) | A MAS that extracts entities, clarifies, rejects out-of-scope | App calls the `enrich_user_request` UC Function directly (Phase 1); clarify/reject is app chat logic | Intake is a deterministic one-shot extraction. Wrapping it in a supervisor adds an LLM hop and latency with no behavioural gain. |
+| **Router Classifier Agent** (supervisor) + in-agent HITL | A MAS that classifies intent and **pauses for human confirmation** before routing | App-owned HITL gate in `session_state`; route = `question_type` from Phase 1 | A deployed MAS endpoint is **synchronous request/response** — it cannot suspend mid-run and wait for a human. The diagram's "HITL inside the agent" is not buildable as drawn; the app gate is the faithful realisation of that intent. |
+| **Topline Agent** `planner → Orchestrator → parallel analyses` | An explicit planner + orchestrator fanning out to brand/category/what analysis | MAS #3 retained (2 Genie + 1 KA); orchestration is the supervisor's native dispatch — no separate planner endpoint | The MAS supervisor already plans/orchestrates. A second planning layer on top of it is redundant. |
+| **Visualization Adapter (LLM)** → Genie API | A Model-Serving LLM endpoint that emits a Plotly spec | Charts built deterministically in-app (Plotly from SQL keyed on route + context); `format_visualization_spec` retained as an optional LLM fallback | LLM-generated full Plotly JSON is an extra critical-path model call with a large failure surface (malformed/hallucinated JSON). Deterministic rendering is faster and supports the >95% render-success target. |
+
+**Net effect on the Databricks footprint:** AgentBricks MAS 4 → **2** (Topline sub +
+single supervisor); custom Model-Serving endpoints 2 → **0**; UC Functions 3 → **1
+required** (`enrich_user_request`) + 2 optional; Lakebase demoted from the HITL critical
+path to an **optional routing audit log**. Genie Spaces (5), Knowledge Assistant (1),
+Databricks Apps, Statement Execution API, Delta, and UC Volumes are retained.
+
+> This is a **production-oriented** realisation of the reference architecture, optimised
+> for correctness and latency. A higher-fidelity "showcase" variant — one that restores
+> the LLM Visualization Adapter and an explicit Planner to map 1:1 with the diagram — is
+> deferred; the in-agent HITL would still be realised as an app gate regardless, because
+> MAS endpoints are synchronous.
 
 ---
 

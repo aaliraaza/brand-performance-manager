@@ -34,6 +34,11 @@ Phase 2 runs. There is no Lakebase polling and no nested Intake/Router superviso
 MAS endpoint is synchronous and cannot pause mid-run for a human, so the app orchestrates the
 two phases. (`pending_confirmations` may be kept as an optional routing audit log.)
 
+> **Divergences from the reference architecture:** this is a production-oriented realisation
+> that deliberately deviates from the original reference diagram (no Intake/Router MAS, no LLM
+> Visualization Adapter, no separate Planner). See **PRD §5.1** and **SDD §1.3** for the full
+> mapping and rationale.
+
 ---
 
 ## Project Structure
