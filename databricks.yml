@@ -1,0 +1,57 @@
+bundle:
+  name: brand-performance-manager
+
+workspace:
+  # Inherited from your active Databricks CLI profile.
+  # Set via: databricks configure --profile <name>
+
+targets:
+
+  dev:
+    default: true
+    mode: development
+    variables:
+      catalog:          ar_dpcatalog
+      lakebase_branch:  main
+      lakebase_db:      brand_perf_db
+
+  prod:
+    mode: production
+    workspace:
+      host: ${workspace.host}
+    variables:
+      catalog:          prod_catalog
+      lakebase_branch:  prod
+      lakebase_db:      brand_perf_prod_db
+
+resources:
+
+  apps:
+    brand_performance_manager_app:
+      name: brand-performance-manager
+      description: "Multi-agent CPG brand analytics powered by Databricks AgentBricks"
+      source_code_path: ./app
+
+      # Lakebase resource binding — grants app access to the PostgreSQL database
+      resources:
+        - name: lakebase
+          database:
+            id: <LAKEBASE_BRANCH>      # ← update with your Lakebase branch ID (from Lakebase UI)
+        - name: lakebase_database
+          database:
+            id: <LAKEBASE_DATABASE>    # ← update with your Lakebase database ID
+
+# ── Notes ─────────────────────────────────────────────────────────────────────
+#
+# 1. Before deploying, update:
+#      - workspace.host (or set via CLI profile)
+#      - <LAKEBASE_BRANCH> and <LAKEBASE_DATABASE> resource IDs
+#      - BPM_AGENT_ENDPOINT and BPM_WAREHOUSE_ID in app/app.yaml
+#
+# 2. Deploy commands:
+#      databricks bundle validate
+#      databricks bundle deploy --target dev
+#      databricks bundle run   --target dev brand_performance_manager_app
+#
+# 3. The app URL will be printed after deployment. Format:
+#      https://<workspace>/apps/brand-performance-manager

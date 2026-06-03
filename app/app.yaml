@@ -1,0 +1,26 @@
+command: ["streamlit", "run", "app.py"]
+
+env:
+  # ── Agent endpoint (set this from notebook 04 output: BPM_AGENT_ENDPOINT) ──
+  - name: BPM_AGENT_ENDPOINT
+    value: "mas-brand-performance-manager-endpoint"  # ← update after running notebook 04
+
+  # ── SQL warehouse for KPI tiles + Phase 1 enrich_user_request call ─────────
+  - name: BPM_WAREHOUSE_ID
+    value: "<YOUR_WAREHOUSE_ID>"  # ← replace with your running SQL warehouse ID
+
+  # (No viz-adapter endpoint — charts are rendered deterministically in the app.)
+
+  # ── Unity Catalog catalog name ─────────────────────────────────────────────
+  - name: BPM_CATALOG
+    value: "ar_dpcatalog"  # ← update to match CATALOG in your notebooks
+
+# ── Auto-injected by Databricks Apps runtime (do NOT set manually) ────────────
+# DATABRICKS_HOST          — workspace URL
+# DATABRICKS_CLIENT_ID     — Apps service principal client ID
+# DATABRICKS_CLIENT_SECRET — Apps service principal client secret
+# PGHOST                   — Lakebase PostgreSQL hostname
+# PGPORT                   — Lakebase PostgreSQL port
+# PGDATABASE               — Lakebase PostgreSQL database
+# PGUSER                   — Lakebase PostgreSQL username
+# PGSSLMODE                — Lakebase SSL mode (require)
