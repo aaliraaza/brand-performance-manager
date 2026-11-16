@@ -216,7 +216,8 @@ Brands Genie · `distribution_velocity` → Distribution & Velocity Genie.
 **Type:** Genie Space  
 **Tables:** `insurgent_brand_tracker`  
 **Sample questions:**
-- "Which challenger brands gained >0.5pt share in the baby food category last 12 weeks?"
+- "Which challenger brands gained 
+>0.5pt share in the baby food category last 12 weeks?"
 - "What is the ACV-weighted velocity of [Brand X] in Walmart vs. our flagship SKU?"
 - "Show me the insurgent brand share trend over the last 52 weeks in the beverage aisle"
 

@@ -1,3 +1,13 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
 pandas>=2.0.0
-plotly>=5.20.0
 psycopg2-binary>=2.9.0
+
+# ── OpenTelemetry: auto-instrumentation + custom app metrics ──────────────────
+# `opentelemetry-distro` provides the `opentelemetry-instrument` launcher and a
+# sensible default SDK; the OTLP gRPC exporter ships spans/metrics to the collector
+# Databricks Apps injects; the FastAPI instrumentation emits per-route request spans
+# and HTTP server duration/count metrics automatically.
+opentelemetry-distro>=0.48b0
+opentelemetry-exporter-otlp-proto-grpc>=1.27.0
+opentelemetry-instrumentation-fastapi>=0.48b0

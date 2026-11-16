@@ -1,13 +1,35 @@
-command: ["streamlit", "run", "app.py"]
+# React SPA (built into ./static) served by FastAPI/uvicorn. The Databricks Apps
+# runtime injects $DATABRICKS_APP_PORT; default to 8000 for local runs.
+#
+# `opentelemetry-instrument` wraps uvicorn to enable OpenTelemetry auto-instrumentation
+# (FastAPI request spans + HTTP server duration/count metrics). It exports over OTLP to
+# the collector Databricks Apps injects when app telemetry is enabled, landing in the
+# Unity Catalog otel_spans / otel_metrics tables. Custom metrics (request counter,
+# latency histogram, in-flight queue gauge, enrich/agent timings) are emitted from
+# server.py via the OTel metrics API and share the same exporter.
+command:
+  - "sh"
+  - "-c"
+  - "opentelemetry-instrument uvicorn server:app --host 0.0.0.0 --port ${DATABRICKS_APP_PORT:-8000}"
 
 env:
+  # ── OpenTelemetry ──────────────────────────────────────────────────────────
+  # Sample every trace (demo-scale traffic). Databricks injects the OTLP endpoint,
+  # protocol, resource attributes, and batch settings automatically.
+  - name: OTEL_TRACES_SAMPLER
+    value: "always_on"
+  # Give auto- and custom-instrumentation a shared service name for easy filtering
+  # (service_name column) in the otel_metrics / otel_spans tables.
+  - name: OTEL_SERVICE_NAME
+    value: "brand-performance-manager"
+
   # ── Agent endpoint (set this from notebook 04 output: BPM_AGENT_ENDPOINT) ──
   - name: BPM_AGENT_ENDPOINT
-    value: "mas-brand-performance-manager-endpoint"  # ← update after running notebook 04
+    value: "mas-b3115b9a-endpoint"  # Brand Performance Manager supervisor (recreated 2026-11-16; prior deleted)
 
   # ── SQL warehouse for KPI tiles + Phase 1 enrich_user_request call ─────────
   - name: BPM_WAREHOUSE_ID
-    value: "<YOUR_WAREHOUSE_ID>"  # ← replace with your running SQL warehouse ID
+    value: "148ccb90800933a1"  # Shared Endpoint (X-Large, always running) — no cold start
 
   # (No viz-adapter endpoint — charts are rendered deterministically in the app.)
 
@@ -24,3 +46,6 @@ env:
 # PGDATABASE               — Lakebase PostgreSQL database
 # PGUSER                   — Lakebase PostgreSQL username
 # PGSSLMODE                — Lakebase SSL mode (require)
+#
+# When app telemetry is enabled, Databricks also injects the OTEL_EXPORTER_OTLP_*
+# endpoint/headers/protocol and OTEL_RESOURCE_ATTRIBUTES — do NOT set them here.

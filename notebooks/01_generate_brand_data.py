@@ -3,8 +3,11 @@
 # MAGIC # Brand Performance Manager — Step 1: Generate Brand Performance Data
 # MAGIC
 # MAGIC Generates 2 years (104 weeks) of synthetic CPG brand performance data for the
-# MAGIC Brand Performance Manager multi-agent demo. Creates five Delta tables in
-# MAGIC `{CATALOG}.brand_performance`:
+# MAGIC Brand Performance Manager multi-agent demo, and **lands it as raw CSV files** in the
+# MAGIC `{CATALOG}.brand_performance.raw_data` volume (`landing/<table>/`) — the way a syndicated
+# MAGIC Nielsen/Circana drop would arrive. The **Lakeflow pipeline** `bpm-brand-performance-ingest`
+# MAGIC (`pipelines/brand_performance_ingest.sql`) then ingests those files with Auto Loader into
+# MAGIC five governed Delta streaming tables in `{CATALOG}.brand_performance`:
 # MAGIC
 # MAGIC | Table | Rows | Description |
 # MAGIC |-------|------|-------------|
@@ -22,6 +25,17 @@
 
 CATALOG = "ar_dpcatalog"   # Update to your catalog
 SCHEMA  = "brand_performance"
+LANDING = f"/Volumes/{CATALOG}/{SCHEMA}/raw_data/landing"
+
+
+def land_raw(df, table: str) -> None:
+    """Write a raw CSV drop for `table`; the Lakeflow pipeline picks it up incrementally.
+
+    Note: Auto Loader ingests each new file once. To fully regenerate (not append), clear
+    landing/<table>/ first and run the pipeline with a *full refresh*.
+    """
+    df.write.mode("overwrite").option("header", "true").csv(f"{LANDING}/{table}")
+    print(f"landed {table} → {LANDING}/{table}")
 
 import random
 import numpy as np
@@ -195,10 +209,9 @@ for col, window in [("l4w_value_share", 4), ("l12w_value_share", 12), ("l52w_val
     )
 
 spark_btm = spark.createDataFrame(btm_df)
-spark_btm.write.format("delta").mode("overwrite").option("overwriteSchema","true") \
-    .saveAsTable(f"{CATALOG}.{SCHEMA}.brand_topline_metrics")
+land_raw(spark_btm, "brand_topline_metrics")
 
-n = spark.table(f"{CATALOG}.{SCHEMA}.brand_topline_metrics").count()
+n = spark_btm.count()
 print(f"brand_topline_metrics: {n:,} rows")
 assert n >= 10_000, f"Expected >=10,000 rows, got {n}"
 
@@ -254,10 +267,9 @@ for category in CATEGORIES:
                     })
 
 msd_df = spark.createDataFrame(pd.DataFrame(decomp_rows))
-msd_df.write.format("delta").mode("overwrite").option("overwriteSchema","true") \
-    .saveAsTable(f"{CATALOG}.{SCHEMA}.market_share_decomposition")
+land_raw(msd_df, "market_share_decomposition")
 
-n = spark.table(f"{CATALOG}.{SCHEMA}.market_share_decomposition").count()
+n = msd_df.count()
 print(f"market_share_decomposition: {n:,} rows")
 assert n >= 5_000, f"Expected >=5,000 rows, got {n}"
 
@@ -319,10 +331,9 @@ for ib in INSURGENT_BRANDS:
                     })
 
 ibt_df = spark.createDataFrame(pd.DataFrame(ins_rows))
-ibt_df.write.format("delta").mode("overwrite").option("overwriteSchema","true") \
-    .saveAsTable(f"{CATALOG}.{SCHEMA}.insurgent_brand_tracker")
+land_raw(ibt_df, "insurgent_brand_tracker")
 
-n = spark.table(f"{CATALOG}.{SCHEMA}.insurgent_brand_tracker").count()
+n = ibt_df.count()
 print(f"insurgent_brand_tracker: {n:,} rows")
 assert n >= 15_000, f"Expected >=15,000 rows, got {n}"
 
@@ -403,10 +414,9 @@ for sku in SKUS:
                 })
 
 dv_df = spark.createDataFrame(pd.DataFrame(dist_rows))
-dv_df.write.format("delta").mode("overwrite").option("overwriteSchema","true") \
-    .saveAsTable(f"{CATALOG}.{SCHEMA}.distribution_velocity")
+land_raw(dv_df, "distribution_velocity")
 
-n = spark.table(f"{CATALOG}.{SCHEMA}.distribution_velocity").count()
+n = dv_df.count()
 print(f"distribution_velocity: {n:,} rows")
 assert n >= 40_000, f"Expected >=40,000 rows, got {n}"
 
@@ -449,10 +459,9 @@ for category in CATEGORIES:
                 })
 
 cb_df = spark.createDataFrame(pd.DataFrame(cb_rows))
-cb_df.write.format("delta").mode("overwrite").option("overwriteSchema","true") \
-    .saveAsTable(f"{CATALOG}.{SCHEMA}.category_benchmarks")
+land_raw(cb_df, "category_benchmarks")
 
-n = spark.table(f"{CATALOG}.{SCHEMA}.category_benchmarks").count()
+n = cb_df.count()
 print(f"category_benchmarks: {n:,} rows")
 assert n >= 1_000, f"Expected >=1,000 rows, got {n}"
 
@@ -466,6 +475,8 @@ print("=" * 65)
 print("  BRAND PERFORMANCE DATA GENERATION COMPLETE")
 print("=" * 65)
 
+# Run the Lakeflow pipeline first (bpm-brand-performance-ingest) — this cell reads the
+# governed tables it produces.
 tables = [
     "brand_topline_metrics",
     "market_share_decomposition",

@@ -5,26 +5,41 @@ workspace:
   # Inherited from your active Databricks CLI profile.
   # Set via: databricks configure --profile <name>
 
+variables:
+  catalog:
+    description: Unity Catalog catalog holding brand_performance / brand_perf_utils
+    default: ar_dpcatalog
+  lakebase_project:
+    description: Lakebase Autoscaling project backing the HITL routing audit log
+    default: brand-performance-manager
+
 targets:
 
   dev:
     default: true
     mode: development
-    variables:
-      catalog:          ar_dpcatalog
-      lakebase_branch:  main
-      lakebase_db:      brand_perf_db
 
   prod:
     mode: production
-    workspace:
-      host: ${workspace.host}
     variables:
       catalog:          prod_catalog
-      lakebase_branch:  prod
-      lakebase_db:      brand_perf_prod_db
+      lakebase_project: brand-performance-manager-prod
 
 resources:
+
+  # ── Lakeflow: raw CSV drops → governed Delta streaming tables ───────────────
+  # Auto Loader reads /Volumes/<catalog>/brand_performance/raw_data/landing/<table>/
+  # and owns the 5 tables the Genie spaces and the app query.
+  pipelines:
+    brand_performance_ingest:
+      name: bpm-brand-performance-ingest
+      catalog: ${var.catalog}
+      schema: brand_performance
+      serverless: true
+      continuous: false
+      libraries:
+        - file:
+            path: ./pipelines/brand_performance_ingest.sql
 
   apps:
     brand_performance_manager_app:
@@ -32,26 +47,26 @@ resources:
       description: "Multi-agent CPG brand analytics powered by Databricks AgentBricks"
       source_code_path: ./app
 
-      # Lakebase resource binding — grants app access to the PostgreSQL database
+      # ── Lakebase: HITL routing audit log (bpm_audit.routing_decisions) ──────
+      # The platform injects PGHOST/PGPORT/PGDATABASE/PGUSER/PGSSLMODE at runtime and
+      # gives the app's service principal a Postgres role on this database.
       resources:
         - name: lakebase
-          database:
-            id: <LAKEBASE_BRANCH>      # ← update with your Lakebase branch ID (from Lakebase UI)
-        - name: lakebase_database
-          database:
-            id: <LAKEBASE_DATABASE>    # ← update with your Lakebase database ID
+          postgres:
+            branch:   projects/${var.lakebase_project}/branches/production
+            database: projects/${var.lakebase_project}/branches/production/databases/databricks-postgres
+            permission: CAN_CONNECT_AND_CREATE
 
 # ── Notes ─────────────────────────────────────────────────────────────────────
 #
-# 1. Before deploying, update:
-#      - workspace.host (or set via CLI profile)
-#      - <LAKEBASE_BRANCH> and <LAKEBASE_DATABASE> resource IDs
-#      - BPM_AGENT_ENDPOINT and BPM_WAREHOUSE_ID in app/app.yaml
+# The live dev deployment was created imperatively (see DEPLOY_STATUS.md): the
+# pipeline via `databricks pipelines create`, the app via `databricks apps create`
+# + `databricks apps update` (resource binding) + `databricks apps deploy`. This
+# file mirrors that config. To manage it with the bundle instead, bind the existing
+# resources first so the bundle doesn't try to create duplicates:
+#      databricks bundle deployment bind brand_performance_ingest <pipeline_id>
+#      databricks bundle deployment bind brand_performance_manager_app brand-performance-manager
 #
-# 2. Deploy commands:
-#      databricks bundle validate
-#      databricks bundle deploy --target dev
-#      databricks bundle run   --target dev brand_performance_manager_app
-#
-# 3. The app URL will be printed after deployment. Format:
-#      https://<workspace>/apps/brand-performance-manager
+# Prerequisites not managed here: the Lakebase project (databricks postgres
+# create-project), the AgentBricks supervisors (_redeploy_mas.py), and the
+# BPM_AGENT_ENDPOINT / BPM_WAREHOUSE_ID values in app/app.yaml.
